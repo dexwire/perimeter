@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <title>PERIMETER // flashlight shooter</title>
 <style>
   :root{
@@ -19,6 +20,8 @@
     overflow: hidden;
     font-family: 'Consolas', 'Courier New', monospace;
     letter-spacing: 0.04em;
+    touch-action: none;
+    overscroll-behavior: none;
   }
   #wrap{
     position: relative;
@@ -169,6 +172,47 @@
     transition: opacity 0.4s ease;
   }
   .wave-banner.show{ opacity: 1; }
+  #touchLayer{
+    position: absolute;
+    inset: 0;
+    z-index: 3;
+    touch-action: none;
+    display: none;
+  }
+  .joybase{
+    position: absolute;
+    width: 96px;
+    height: 96px;
+    margin-left: -48px;
+    margin-top: -48px;
+    border-radius: 50%;
+    border: 2px solid rgba(77,243,255,0.35);
+    background: rgba(10,20,22,0.25);
+    pointer-events: none;
+    display: none;
+  }
+  .joybase.aimbase{
+    border-color: rgba(255,77,216,0.35);
+  }
+  .joyknob{
+    position: absolute;
+    width: 44px;
+    height: 44px;
+    margin-left: -22px;
+    margin-top: -22px;
+    border-radius: 50%;
+    background: rgba(77,243,255,0.35);
+    box-shadow: 0 0 14px rgba(77,243,255,0.6);
+    pointer-events: none;
+  }
+  .joyknob.aimknob{
+    background: rgba(255,77,216,0.35);
+    box-shadow: 0 0 14px rgba(255,77,216,0.6);
+  }
+  @media (pointer: coarse){
+    #touchLayer{ display: block; }
+    .hint{ display: none; }
+  }
 </style>
 </head>
 <body>
@@ -189,6 +233,13 @@
   <div class="hint">WASD move &nbsp; · &nbsp; MOUSE or ARROWS aim &nbsp; · &nbsp; CLICK or SPACE fire (hold) &nbsp; · &nbsp; R reload</div>
 
   <div class="wave-banner" id="waveBanner">WAVE 1</div>
+
+  <div id="touchLayer">
+    <div class="joybase" id="moveBase"></div>
+    <div class="joyknob" id="moveKnob"></div>
+    <div class="joybase aimbase" id="aimBase"></div>
+    <div class="joyknob aimknob" id="aimKnob"></div>
+  </div>
 
   <div class="overlay" id="upgradeScreen">
     <h1 style="color:var(--cyan); text-shadow:0 0 16px rgba(77,243,255,0.7);">WAVE CLEARED</h1>
@@ -345,6 +396,83 @@
   canvas.addEventListener('mousedown', () => { mouse.down = true; });
   window.addEventListener('mouseup', () => { mouse.down = false; });
 
+  // ---------- touch joystick controls (mobile) ----------
+  const touchLayer = document.getElementById('touchLayer');
+  const moveBase = document.getElementById('moveBase');
+  const moveKnob = document.getElementById('moveKnob');
+  const aimBase = document.getElementById('aimBase');
+  const aimKnob = document.getElementById('aimKnob');
+  const JOY_RADIUS = 48;
+
+  const moveStick = { id: null, baseX: 0, baseY: 0, x: 0, y: 0, active: false };
+  const aimStick  = { id: null, baseX: 0, baseY: 0, x: 0, y: 0, active: false };
+
+  function showStick(baseEl, knobEl, x, y){
+    baseEl.style.left = x+'px'; baseEl.style.top = y+'px';
+    knobEl.style.left = x+'px'; knobEl.style.top = y+'px';
+    baseEl.style.display = 'block'; knobEl.style.display = 'block';
+  }
+  function moveKnobTo(knobEl, baseX, baseY, dx, dy){
+    knobEl.style.left = (baseX+dx)+'px';
+    knobEl.style.top = (baseY+dy)+'px';
+  }
+  function hideStick(baseEl, knobEl){
+    baseEl.style.display = 'none'; knobEl.style.display = 'none';
+  }
+
+  touchLayer.addEventListener('touchstart', e => {
+    e.preventDefault();
+    for(const t of e.changedTouches){
+      const isLeft = t.clientX < window.innerWidth/2;
+      if(isLeft && moveStick.id === null){
+        moveStick.id = t.identifier;
+        moveStick.baseX = t.clientX; moveStick.baseY = t.clientY;
+        moveStick.x = 0; moveStick.y = 0; moveStick.active = true;
+        showStick(moveBase, moveKnob, t.clientX, t.clientY);
+      } else if(!isLeft && aimStick.id === null){
+        aimStick.id = t.identifier;
+        aimStick.baseX = t.clientX; aimStick.baseY = t.clientY;
+        aimStick.x = 0; aimStick.y = 0; aimStick.active = true;
+        showStick(aimBase, aimKnob, t.clientX, t.clientY);
+      }
+    }
+  }, { passive:false });
+
+  touchLayer.addEventListener('touchmove', e => {
+    e.preventDefault();
+    for(const t of e.changedTouches){
+      if(t.identifier === moveStick.id){
+        let dx = t.clientX - moveStick.baseX;
+        let dy = t.clientY - moveStick.baseY;
+        const len = Math.hypot(dx,dy);
+        if(len > JOY_RADIUS){ dx = dx/len*JOY_RADIUS; dy = dy/len*JOY_RADIUS; }
+        moveStick.x = dx/JOY_RADIUS; moveStick.y = dy/JOY_RADIUS;
+        moveKnobTo(moveKnob, moveStick.baseX, moveStick.baseY, dx, dy);
+      } else if(t.identifier === aimStick.id){
+        let dx = t.clientX - aimStick.baseX;
+        let dy = t.clientY - aimStick.baseY;
+        const len = Math.hypot(dx,dy);
+        if(len > JOY_RADIUS){ dx = dx/len*JOY_RADIUS; dy = dy/len*JOY_RADIUS; }
+        aimStick.x = dx/JOY_RADIUS; aimStick.y = dy/JOY_RADIUS;
+        moveKnobTo(aimKnob, aimStick.baseX, aimStick.baseY, dx, dy);
+      }
+    }
+  }, { passive:false });
+
+  function endTouch(e){
+    for(const t of e.changedTouches){
+      if(t.identifier === moveStick.id){
+        moveStick.id = null; moveStick.active = false; moveStick.x = 0; moveStick.y = 0;
+        hideStick(moveBase, moveKnob);
+      } else if(t.identifier === aimStick.id){
+        aimStick.id = null; aimStick.active = false; aimStick.x = 0; aimStick.y = 0;
+        hideStick(aimBase, aimKnob);
+      }
+    }
+  }
+  touchLayer.addEventListener('touchend', endTouch, { passive:false });
+  touchLayer.addEventListener('touchcancel', endTouch, { passive:false });
+
   // ---------- helpers ----------
   function dist(ax,ay,bx,by){ return Math.hypot(ax-bx, ay-by); }
 
@@ -477,18 +605,24 @@
     if(keys['s']) my += 1;
     if(keys['a']) mx -= 1;
     if(keys['d']) mx += 1;
+    if(moveStick.active && Math.hypot(moveStick.x, moveStick.y) > 0.12){
+      mx = moveStick.x; my = moveStick.y;
+    }
     const mlen = Math.hypot(mx,my) || 1;
     player.x += (mx/mlen) * player.speed * dt;
     player.y += (my/mlen) * player.speed * dt;
     player.x = Math.max(player.radius, Math.min(W-player.radius, player.x));
     player.y = Math.max(player.radius, Math.min(H-player.radius, player.y));
 
-    // aim: arrow keys override mouse aim when held
+    // aim: arrow keys or aim stick override mouse aim when active
     let lookX = 0, lookY = 0;
     if(keys['arrowup']) lookY -= 1;
     if(keys['arrowdown']) lookY += 1;
     if(keys['arrowleft']) lookX -= 1;
     if(keys['arrowright']) lookX += 1;
+    if(aimStick.active && Math.hypot(aimStick.x, aimStick.y) > 0.15){
+      lookX = aimStick.x; lookY = aimStick.y;
+    }
     if(lookX !== 0 || lookY !== 0){
       player.angle = Math.atan2(lookY, lookX);
     } else {
@@ -506,7 +640,7 @@
       }
     }
 
-    const wantsFire = mouse.down || keys[' '] || keys['spacebar'];
+    const wantsFire = mouse.down || keys[' '] || keys['spacebar'] || aimStick.active;
     if(wantsFire && !reloading && fireTimer <= 0){
       if(ammo > 0){
         fireBullet();
@@ -778,6 +912,7 @@
   }
 
   function drawCrosshair(){
+    if(window.matchMedia('(pointer: coarse)').matches) return;
     ctx.strokeStyle = 'rgba(77,243,255,0.8)';
     ctx.lineWidth = 1.4;
     ctx.beginPath();
