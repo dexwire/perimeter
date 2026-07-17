@@ -542,15 +542,23 @@
   }
 
   function fireBullet(){
-    const dx = mouse.x - player.x;
-    const dy = mouse.y - player.y;
-    const len = Math.hypot(dx,dy) || 1;
+    // Always fire along the player's current facing angle. This angle is
+    // already computed each frame from whichever aim source is currently
+    // driving it (mouse position, arrow keys, or the mobile aim
+    // joystick) -- see the aim block in update(). Previously this
+    // recomputed a direction straight from mouse.x/mouse.y, which never
+    // updates on touch devices (there's no mousemove), so bullets always
+    // flew toward the stale initial mouse point near the center of the
+    // screen regardless of where the player was aiming. That's why shots
+    // mostly went "down": the player was usually above that fixed point.
+    const dx = Math.cos(player.angle);
+    const dy = Math.sin(player.angle);
     const spd = 620;
     bullets.push({
-      x: player.x + Math.cos(player.angle)*18,
-      y: player.y + Math.sin(player.angle)*18,
-      vx: (dx/len)*spd,
-      vy: (dy/len)*spd,
+      x: player.x + dx*18,
+      y: player.y + dy*18,
+      vx: dx*spd,
+      vy: dy*spd,
       life: 1.1
     });
     // muzzle spark
